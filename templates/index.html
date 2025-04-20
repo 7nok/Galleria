@@ -1,0 +1,495 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a252f 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .controls button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+        }
+        .delete-btn { background: #e74c3c; }
+        .download-btn { background: #3498db; }
+        .select-mode-btn { background: #2ecc71; }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 10px;
+            margin-top: 20px;
+        }
+        .gallery img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 5px;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .gallery img:hover {
+            transform: scale(1.05);
+        }
+        .image-container {
+            position: relative;
+            cursor: pointer;
+        }
+        .image-container input[type="checkbox"] {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 20px;
+            height: 20px;
+            display: none;
+            z-index: 10;
+        }
+        .select-mode .image-container input[type="checkbox"] {
+            display: block;
+        }
+        .image-select:checked ~ img {
+            border: 3px solid #2ecc71;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+        .focused-image-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+            cursor: grab;
+        }
+        .focused-image-container.dragging {
+            cursor: grabbing;
+        }
+        .focused-image {
+            max-width: 80%;
+            max-height: 80%;
+            border-radius: 10px;
+            transform-origin: center;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        .focused-image.dragging {
+            transition: none;
+        }
+        .close-button, .reset-button, .prev-button, .next-button {
+            position: absolute;
+            padding: 10px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        .close-button {
+            top: 20px;
+            right: 20px;
+            background: #e74c3c;
+        }
+        .reset-button {
+            top: 20px;
+            right: 120px;
+            background: #2ecc71;
+        }
+        .prev-button, .next-button {
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.5);
+            font-size: 24px;
+        }
+        .prev-button {
+            left: 10px;
+        }
+        .next-button {
+            right: 10px;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            transition: opacity 0.5s;
+        }
+        .success { background: #2ecc71; }
+        .error { background: #e74c3c; }
+        .upload-section {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .upload-section h2 {
+            margin-top: 0;
+        }
+        .login-btn {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+        .login-btn:hover {
+            background: #2980b9;
+        }
+        @media (max-width: 600px) {
+            .gallery {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+            .gallery img {
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Photo Gallery</h1>
+        <div>
+            {% if session.username %}
+                <span>Welcome, {{ session.username }}!</span>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="login-btn">Admin Login</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="select-mode-btn" onclick="toggleSelectMode()">Toggle Select Mode</button>
+        <button class="download-btn" onclick="batchDownload()">Download Selected</button>
+        {% if is_admin %}
+            <button class="delete-btn" onclick="batchDelete()">Delete Selected</button>
+        {% endif %}
+    </div>
+
+    {% if is_admin %}
+    <div class="upload-section">
+        <h2>Upload New Image</h2>
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('upload_file') }}">
+            <input type="file" name="file" accept="image/*">
+            <input type="submit" value="Upload">
+        </form>
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="gallery" id="gallery">
+        {% for image in images %}
+            <div class="image-container" onclick="handleContainerClick(event, '{{ url_for('uploaded_file', filename=image) }}')">
+                <input type="checkbox" class="image-select" data-filename="{{ image }}">
+                <img src="{{ url_for('static', filename='thumbnails/' + image) }}" 
+                     data-fullsrc="{{ url_for('uploaded_file', filename=image) }}" 
+                     alt="{{ image }}">
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="focused-image-container" id="focusedImageContainer">
+        <button class="prev-button">←</button>
+        <img src="" alt="Focused image" class="focused-image" id="focusedImage">
+        <button class="next-button">→</button>
+        <button class="reset-button" onclick="resetView()">Reset View</button>
+        <button class="close-button" onclick="closeFocusedImage()">Close</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const messages = document.querySelectorAll('.message.success');
+            messages.forEach(msg => {
+                setTimeout(() => {
+                    msg.style.opacity = '0';
+                    setTimeout(() => msg.remove(), 500);
+                }, 3000);
+            });
+        });
+
+        let isSelectMode = false;
+        let imageSources = Array.from(document.querySelectorAll('.gallery img')).map(img => img.dataset.fullsrc);
+        let currentImageIndex = -1;
+
+        function toggleSelectMode() {
+            isSelectMode = !isSelectMode;
+            const gallery = document.getElementById('gallery');
+            gallery.classList.toggle('select-mode');
+            const btn = document.querySelector('.select-mode-btn');
+            btn.textContent = isSelectMode ? 'Exit Select Mode' : 'Toggle Select Mode';
+            if (!isSelectMode) {
+                const checkboxes = gallery.querySelectorAll('.image-select');
+                checkboxes.forEach(checkbox => checkbox.checked = false);
+            }
+        }
+
+        function handleContainerClick(event, src) {
+            const container = event.currentTarget;
+            const checkbox = container.querySelector('.image-select');
+            const img = container.querySelector('img');
+            if (isSelectMode) {
+                if (event.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                }
+            } else {
+                if (event.target === img) {
+                    focusImage(src);
+                }
+            }
+        }
+
+        function getSelectedImages() {
+            return Array.from(document.querySelectorAll('.image-select:checked'))
+                .map(checkbox => checkbox.dataset.filename);
+        }
+
+        function batchDelete() {
+            const selected = getSelectedImages();
+            if (selected.length === 0) {
+                alert('Please select at least one image');
+                return;
+            }
+            if (confirm(`Are you sure you want to delete ${selected.length} image(s)?`)) {
+                Promise.all(selected.map(filename => 
+                    fetch(`/delete/${filename}`, { method: 'POST' })
+                )).then(() => location.reload());
+            }
+        }
+
+        function batchDownload() {
+            const selected = getSelectedImages();
+            if (selected.length === 0) {
+                alert('Please select at least one image');
+                return;
+            }
+            selected.forEach(filename => {
+                const link = document.createElement('a');
+                link.href = `/uploads/${filename}`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }
+
+        let currentScale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX, startY;
+
+        function focusImage(src) {
+            const container = document.getElementById('focusedImageContainer');
+            const img = document.getElementById('focusedImage');
+            img.src = src;
+            currentImageIndex = imageSources.indexOf(src);
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateImageTransform();
+            container.style.display = 'flex';
+        }
+
+        function closeFocusedImage() {
+            const container = document.getElementById('focusedImageContainer');
+            container.style.display = 'none';
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+        }
+
+        function resetView() {
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateImageTransform();
+        }
+
+        function updateImageTransform() {
+            const img = document.getElementById('focusedImage');
+            img.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+        }
+
+        document.getElementById('focusedImageContainer').addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            currentScale = Math.max(0.5, Math.min(10, currentScale + delta));
+            updateImageTransform();
+        });
+
+        const focusedContainer = document.getElementById('focusedImageContainer');
+        const focusedImg = document.getElementById('focusedImage');
+        focusedContainer.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('close-button') || e.target.classList.contains('reset-button') || 
+                e.target.classList.contains('prev-button') || e.target.classList.contains('next-button')) return;
+            e.preventDefault();
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            focusedImg.classList.add('dragging');
+            focusedContainer.classList.add('dragging');
+        });
+
+        focusedContainer.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                translateX = e.clientX - startX;
+                translateY = e.clientY - startY;
+                updateImageTransform();
+            }
+        });
+
+        focusedContainer.addEventListener('mouseup', () => {
+            isDragging = false;
+            focusedImg.classList.remove('dragging');
+            focusedContainer.classList.remove('dragging');
+        });
+
+        focusedContainer.addEventListener('mouseleave', () => {
+            isDragging = false;
+            focusedImg.classList.remove('dragging');
+            focusedContainer.classList.remove('dragging');
+        });
+
+        const prevButton = document.querySelector('.prev-button');
+        const nextButton = document.querySelector('.next-button');
+
+        prevButton.addEventListener('click', () => {
+            if (currentImageIndex > 0) {
+                currentImageIndex--;
+                document.getElementById('focusedImage').src = imageSources[currentImageIndex];
+                resetView();
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (currentImageIndex < imageSources.length - 1) {
+                currentImageIndex++;
+                document.getElementById('focusedImage').src = imageSources[currentImageIndex];
+                resetView();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('focusedImageContainer').style.display === 'flex') {
+                if (e.key === 'ArrowLeft' && currentImageIndex > 0) {
+                    currentImageIndex--;
+                    document.getElementById('focusedImage').src = imageSources[currentImageIndex];
+                    resetView();
+                } else if (e.key === 'ArrowRight' && currentImageIndex < imageSources.length - 1) {
+                    currentImageIndex++;
+                    document.getElementById('focusedImage').src = imageSources[currentImageIndex];
+                    resetView();
+                }
+            }
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93305476bf7a4566',t:'MTc0NTEwNjg5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
